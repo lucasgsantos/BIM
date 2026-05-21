@@ -46,3 +46,42 @@ pub struct EdgeModel {
     pub label: String,
     pub created_at: DateTime<Utc>,
 }
+
+// ── ProcessOrder ──────────────────────────────────────────────────────────────
+
+#[derive(Debug, FromRow, Serialize, Deserialize, Clone)]
+pub struct ProcessOrderModel {
+    pub id: Uuid,
+    /// Human-readable order number, e.g. "PO-2024-001". Unique.
+    pub order_number: String,
+    pub description: String,
+    /// FK to workflows — nullable (SET NULL on workflow delete).
+    pub workflow_id: Option<Uuid>,
+    /// Denormalised snapshot of the MBR name at creation time.
+    pub workflow_name: String,
+    /// Lifecycle: pending | in_progress | completed | cancelled
+    pub status: String,
+    pub assigned_to: String,
+    pub scheduled_date: String,
+    /// 0-based index of the next step to execute.
+    pub current_step: i32,
+    pub total_steps: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+// ── ProcessOrderExecution ─────────────────────────────────────────────────────
+
+/// Append-only audit log row — one per confirmed node step.
+#[derive(Debug, FromRow, Serialize, Deserialize, Clone)]
+pub struct ProcessOrderExecutionModel {
+    pub id: Uuid,
+    pub process_order_id: Uuid,
+    pub node_canvas_id: String,
+    pub node_type: String,
+    pub node_label: String,
+    pub step_number: i32,
+    pub confirmed_by: String,
+    pub notes: String,
+    pub confirmed_at: DateTime<Utc>,
+}

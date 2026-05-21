@@ -39,15 +39,24 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    println!("🚀 Workflow Designer API running at http://localhost:8000");
+    let api_url = env::var("API_URL")
+    .expect("API_URL must be set in .env");
+
+    let api_host = env::var("API_HOST")
+    .expect("API_HOST must be set in .env");
+
+    let api_port: u16 = env::var("API_PORT").expect("API_PORT must be set in .env").parse::<u16>().unwrap();
+
+    let web_url = env::var("WEB_URL")
+    .expect("WEB_URL must be set in .env");
+
+    println!("🚀 BIM MES API running at {:?}", api_url);
 
     // ── HTTP server ───────────────────────────────────────────────────────────
     HttpServer::new(move || {
-        // CORS — allow the React dev server on :3000 and any origin in prod.
         let cors = Cors::default()
-            .allowed_origin("http://localhost:3000")
-            .allowed_origin("http://127.0.0.1:3000")
-            .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+            .allowed_origin(&web_url)
+            .allowed_methods(vec!["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
             .allowed_headers(vec![
                 header::CONTENT_TYPE,
                 header::AUTHORIZATION,
@@ -57,32 +66,37 @@ async fn main() -> std::io::Result<()> {
             .max_age(3600);
 
         App::new()
-            // Share the DB pool with every handler
             .app_data(web::Data::new(pool.clone()))
-            // JSON extractor config — return 400 on bad JSON
             .app_data(
-                web::JsonConfig::default()
-                    .error_handler(|err, _req| {
-                        let response = actix_web::HttpResponse::BadRequest().json(
-                            serde_json::json!({
-                                "status": "error",
-                                "message": format!("{}", err)
-                            }),
-                        );
-                        actix_web::error::InternalError::from_response(err, response).into()
-                    }),
+                web::JsonConfig::default().error_handler(|err, _req| {
+                    let response = actix_web::HttpResponse::BadRequest().json(
+                        serde_json::json!({ "status": "error", "message": format!("{}", err) }),
+                    );
+                    actix_web::error::InternalError::from_response(err, response).into()
+                }),
             )
             .wrap(cors)
             .wrap(Logger::default())
-            // ── Routes ────────────────────────────────────────────────────────
+            // ── Health ────────────────────────────────────────────────────────
             .service(handler::health_checker)
+            // ── Workflow (MBR) routes ─────────────────────────────────────────
             .service(handler::list_workflows)
             .service(handler::create_workflow)
             .service(handler::get_workflow)
             .service(handler::save_diagram)
             .service(handler::delete_workflow)
+            // ── Process Order (EBR) routes ────────────────────────────────────
+            .service(handler::list_orders)
+            .service(handler::create_order)
+            .service(handler::get_order)
+            .service(handler::update_order)
+            .service(handler::delete_order)
+            .service(handler::start_order)
+            .service(handler::confirm_step)
+            .service(handler::complete_order)
+            .service(handler::cancel_order)
     })
-    .bind(("0.0.0.0", 8000))?
+    .bind((api_host, api_port))?
     .run()
     .await
 }
