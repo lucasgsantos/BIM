@@ -206,7 +206,7 @@ pub async fn save_diagram(
         "UPDATE workflows SET name = $1, description = $2, updated_at = $3 WHERE id = $4",
         body.name.trim(), body.description.trim(), now, id
     )
-    .execute(&mut tx)
+    .execute(&mut *tx)
     .await;
 
     match update {
@@ -218,12 +218,12 @@ pub async fn save_diagram(
     }
 
     if let Err(e) = sqlx::query!("DELETE FROM wf_nodes WHERE workflow_id = $1", id)
-        .execute(&mut tx).await
+        .execute(&mut *tx).await
     { let _ = tx.rollback().await; return HttpResponse::InternalServerError()
         .json(json!({ "status": "error", "message": format!("{:?}", e) })); }
 
     if let Err(e) = sqlx::query!("DELETE FROM wf_edges WHERE workflow_id = $1", id)
-        .execute(&mut tx).await
+        .execute(&mut *tx).await
     { let _ = tx.rollback().await; return HttpResponse::InternalServerError()
         .json(json!({ "status": "error", "message": format!("{:?}", e) })); }
 
@@ -235,7 +235,7 @@ pub async fn save_diagram(
                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)"#,
             node_id, id, node.canvas_id, node.node_type, node.label,
             node.pos_x, node.pos_y, node_now, node_now
-        ).execute(&mut tx).await
+        ).execute(&mut *tx).await
         { let _ = tx.rollback().await; return HttpResponse::InternalServerError()
             .json(json!({ "status": "error", "message": format!("Node insert: {:?}", e) })); }
     }
@@ -247,7 +247,7 @@ pub async fn save_diagram(
             r#"INSERT INTO wf_edges (id, workflow_id, from_node_canvas_id, to_node_canvas_id, label, created_at)
                VALUES ($1,$2,$3,$4,$5,$6)"#,
             edge_id, id, edge.from_node_canvas_id, edge.to_node_canvas_id, edge.label, edge_now
-        ).execute(&mut tx).await
+        ).execute(&mut *tx).await
         { let _ = tx.rollback().await; return HttpResponse::InternalServerError()
             .json(json!({ "status": "error", "message": format!("Edge insert: {:?}", e) })); }
     }
@@ -679,7 +679,7 @@ pub async fn confirm_step(
         body.node_canvas_id, body.node_type, body.node_label,
         body.step_number, body.confirmed_by, body.notes, confirmed_at
     )
-    .execute(&mut tx)
+    .execute(&mut *tx)
     .await
     {
         let _ = tx.rollback().await;
@@ -693,7 +693,7 @@ pub async fn confirm_step(
         "UPDATE process_orders SET current_step = $1, updated_at = $2 WHERE id = $3",
         body.step_number, now, id
     )
-    .execute(&mut tx)
+    .execute(&mut *tx)
     .await
     {
         let _ = tx.rollback().await;

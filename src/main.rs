@@ -1,6 +1,7 @@
 // src/main.rs
 
 mod handler;
+mod handler_master;
 mod model;
 mod schema;
 
@@ -14,13 +15,12 @@ use std::env;
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
 
-    // ── Logging ───────────────────────────────────────────────────────────────
     if env::var_os("RUST_LOG").is_none() {
         env::set_var("RUST_LOG", "actix_web=info");
     }
     env_logger::init();
 
-    // ── Database pool ─────────────────────────────────────────────────────────
+    // â”€â”€ Database pool â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let database_url = env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set in .env");
 
@@ -30,11 +30,11 @@ async fn main() -> std::io::Result<()> {
         .await
     {
         Ok(p) => {
-            println!("✅ Connected to PostgreSQL");
+            println!("âœ… Connected to PostgreSQL");
             p
         }
         Err(e) => {
-            eprintln!("❌ Failed to connect to database: {:?}", e);
+            eprintln!("âŒ Failed to connect to database: {:?}", e);
             std::process::exit(1);
         }
     };
@@ -50,9 +50,8 @@ async fn main() -> std::io::Result<()> {
     let web_url = env::var("WEB_URL")
     .expect("WEB_URL must be set in .env");
 
-    println!("🚀 BIM MES API running at {:?}", api_url);
+    println!("BIM MES API running at {:?}", api_url);
 
-    // ── HTTP server ───────────────────────────────────────────────────────────
     HttpServer::new(move || {
         let cors = Cors::default()
             .allowed_origin(&web_url)
@@ -69,23 +68,23 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(pool.clone()))
             .app_data(
                 web::JsonConfig::default().error_handler(|err, _req| {
-                    let response = actix_web::HttpResponse::BadRequest().json(
+                    let resp = actix_web::HttpResponse::BadRequest().json(
                         serde_json::json!({ "status": "error", "message": format!("{}", err) }),
                     );
-                    actix_web::error::InternalError::from_response(err, response).into()
+                    actix_web::error::InternalError::from_response(err, resp).into()
                 }),
             )
             .wrap(cors)
             .wrap(Logger::default())
             // ── Health ────────────────────────────────────────────────────────
             .service(handler::health_checker)
-            // ── Workflow (MBR) routes ─────────────────────────────────────────
+            // ── Workflow (MBR) ────────────────────────────────────────────────
             .service(handler::list_workflows)
             .service(handler::create_workflow)
             .service(handler::get_workflow)
             .service(handler::save_diagram)
             .service(handler::delete_workflow)
-            // ── Process Order (EBR) routes ────────────────────────────────────
+            // ── Process Order (EBR) ───────────────────────────────────────────
             .service(handler::list_orders)
             .service(handler::create_order)
             .service(handler::get_order)
@@ -95,6 +94,30 @@ async fn main() -> std::io::Result<()> {
             .service(handler::confirm_step)
             .service(handler::complete_order)
             .service(handler::cancel_order)
+            // ── Master Data: Material ─────────────────────────────────────────
+            .service(handler_master::list_materials)
+            .service(handler_master::create_material)
+            .service(handler_master::get_material)
+            .service(handler_master::update_material)
+            .service(handler_master::delete_material)
+            // ── Master Data: Location ─────────────────────────────────────────
+            .service(handler_master::list_locations)
+            .service(handler_master::create_location)
+            .service(handler_master::get_location)
+            .service(handler_master::update_location)
+            .service(handler_master::delete_location)
+            // ── Master Data: Batch ────────────────────────────────────────────
+            .service(handler_master::list_batches)
+            .service(handler_master::create_batch)
+            .service(handler_master::get_batch)
+            .service(handler_master::update_batch)
+            .service(handler_master::delete_batch)
+            // ── Master Data: Handling Unit ────────────────────────────────────
+            .service(handler_master::list_handling_units)
+            .service(handler_master::create_handling_unit)
+            .service(handler_master::get_handling_unit)
+            .service(handler_master::update_handling_unit)
+            .service(handler_master::delete_handling_unit)
     })
     .bind((api_host, api_port))?
     .run()
